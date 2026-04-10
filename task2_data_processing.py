@@ -1,28 +1,39 @@
-import json
-import csv
-import glob
+import pandas as pd
+import os
+from datetime import datetime
 
-# get latest JSON file
-file = sorted(glob.glob("data/trends_*.json"))[-1]
+# Load JSON
+print("Loading JSON file...")
+json_files = [f for f in os.listdir("data") if f.startswith("trends_") and f.endswith(".json")]
+latest_file = max(json_files)  # get latest
+df = pd.read_json(f"data/{latest_file}")
 
-with open(file, "r") as f:
-    data = json.load(f)
+print(f"Loaded {len(df)} stories from {latest_file}")
 
-cleaned = []
+# Cleaning
+df = df.drop_duplicates(subset="post_id")
+print(f"After removing duplicates: {len(df)}")
 
-for item in data:
-    # remove missing values
-    if not item["title"] or not item["author"]:
-        continue
+df = df.dropna(subset=["post_id", "title", "score"])
+print(f"After removing nulls: {len(df)}")
 
-    cleaned.append(item)
+# Data types
+df["score"] = df["score"].astype(int)
+df["num_comments"] = df["num_comments"].astype(int)
 
-# save CSV
-csv_file = file.replace(".json", ".csv")
+# Remove low quality
+df = df[df["score"] >= 5]
+print(f"After removing low scores: {len(df)}")
 
-with open(csv_file, "w", newline="") as f:
-    writer = csv.DictWriter(f, fieldnames=cleaned[0].keys())
-    writer.writeheader()
-    writer.writerows(cleaned)
+# Strip whitespace
+df["title"] = df["title"].str.strip()
 
-print(f"Cleaned data saved to {csv_file}")
+# Save as CSV
+os.makedirs("data", exist_ok=True)
+df.to_csv("data/trends_clean.csv", index=False)
+
+print(f"\nSaved {len(df)} rows to data/trends_clean.csv")
+
+# Summary
+print("\nStories per category:")
+print(df["category"].value_counts().sort_index())
