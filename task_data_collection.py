@@ -4,67 +4,88 @@ import os
 import time
 from datetime import datetime
 
+# Headers as required
 headers = {"User-Agent": "TrendPulse/1.0"}
 
-keywords = {
-    "technology": ["ai","software","tech","code","computer","data","cloud","api","gpu","llm","programming"],
-    "worldnews": ["war","government","country","president","election","climate","attack","global","india","china"],
-    "sports": ["nfl","nba","fifa","sport","game","team","player","league","championship","cricket"],
-    "science": ["research","study","space","physics","biology","discovery","nasa","genome","quantum"],
-    "entertainment": ["movie","film","music","netflix","book","show","award","streaming","actor"]
+# Keyword mapping for categorization (case-insensitive)
+CATEGORIES = {
+    "technology": ["ai", "software", "tech", "code", "computer", "data", "cloud", "api", "gpu", "llm"],
+    "worldnews": ["war", "government", "country", "president", "election", "climate", "attack", "global"],
+    "sports": ["nfl", "nba", "fifa", "sport", "game", "team", "player", "league", "championship"],
+    "science": ["research", "study", "space", "physics", "biology", "discovery", "nasa", "genome"],
+    "entertainment": ["movie", "film", "music", "netflix", "game", "book", "show", "award", "streaming"]
 }
 
-def categorize(title):
-    title = title.lower()
-    for category, words in keywords.items():
-        if any(word in title for word in words):
-            return category
-    return None
+def get_category(title):
+    title_lower = title.lower()
+    for cat, keywords in CATEGORIES.items():
+        if any(kw in title_lower for kw in keywords):
+            return cat
+    return "technology"  # default if no match
 
-# === Main Collection ===
-response = requests.get("https://hacker-news.firebaseio.com/v0/topstories.json", 
-                       headers=headers, timeout=20)
-top_ids = response.json()[:100]   # Reduced to 100 for stability
-
-counts = {cat: 0 for cat in keywords}
-data = []
-
-for story_id in top_ids:
-    try:
-        res = requests.get(f"https://hacker-news.firebaseio.com/v0/item/{story_id}.json", 
-                          headers=headers, timeout=8)
-        
-        if res.status_code == 200:
-            story = res.json()
-            title = story.get("title", "")
-            category = categorize(title)
-
-            if category and counts[category] < 25:
-                data.append({
-                    "post_id": story.get("id"),
-                    "title": title,
-                    "category": category,
-                    "score": story.get("score"),
-                    "num_comments": story.get("descendants", 0),
-                    "author": story.get("by"),
-                    "collected_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                })
-                counts[category] += 1
-
-        time.sleep(0.6)   # Increased delay to prevent hanging
-
-        if all(v >= 25 for v in counts.values()):
-            break
-
-    except:
-        time.sleep(1)
-        continue
-
-# Save to data.json (fixed name, overwrites every time)
+# Step 1: Create data folder
 os.makedirs("data", exist_ok=True)
 
-with open("data/data.json", "w", encoding="utf-8") as f:
-    json.dump(data, f, indent=4, ensure_ascii=False)
+# Step 2: Get top story IDs
+print("Fetching top stories IDs...")
+response = requests.get("https://hacker-news.firebaseio.com/v0/topstories.json", headers=headers)
+if response.status_code != 200:
+    print("Failed to fetch top stories")
+    exit()
 
-print(f"✅ Done! Collected {len(data)} stories")
-print("📁 Saved to: data/data.json")
+story_ids = response.json()[:500]  # first 500
+
+stories = []
+collected_count = {cat: 0 for cat in CATEGORIES.keys()}
+
+print("Fetching story details...")
+
+for i, story_id in enumerate(story_ids):
+    try:
+        url = f"https://hacker-news.firebaseio.com/v0/item/{story_id}.json"
+        resp = requests.get(url, headers=headers)
+        
+        if resp.status_code != 200:
+            print(f"Failed to fetch story {story_id}")
+            continue
+            
+        story = resp.json()
+        
+        if not story or "title" not in story:
+            continue
+            
+        category = get_category(story["title"])
+        
+        # Limit to 25 per category
+        if collected_count[category] >= 25:
+            continue
+            
+        story_data = {
+            "post_id": story.get("id"),
+            "title": story.get("title"),
+            "category": category,
+            "score": story.get("score", 0),
+            "num_comments": story.get("descendants", 0),
+            "author": story.get("by"),
+            "collected_at": datetime.now().isoformat()
+        }
+        
+        stories.append(story_data)
+        collected_count[category] += 1
+        
+        # Progress
+        if len(stories) % 20 == 0:
+            print(f"Collected {len(stories)} stories...")
+            
+    except Exception as e:
+        print(f"Error fetching story {story_id}: {e}")
+        continue
+
+# Save to JSON
+date_str = datetime.now().strftime("%Y%m%d")
+
+
+with open(data.json, "w", encoding="utf-8") as f:
+    json.dump(stories, f, indent=2, ensure_ascii=False)
+
+print(f"\nCollected {len(stories)} stories. Saved to {filename}")
