@@ -1,11 +1,42 @@
 import pandas as pd
 import matplotlib.pyplot as plt
+import glob
 
-df = pd.read_csv("clean_data.csv")
-language_count = df["language"].value_counts().head(5)
-plt.figure()
-language_count.plot(kind="bar")
-plt.title("Top Programming Languages (Trending Repos)")
-plt.xlabel("Language")
-plt.ylabel("Count")
-plt.show()
+# === Find the latest JSON file ===
+files = glob.glob("data/data.json") + glob.glob("data/trends_*.json")
+
+if not files:
+    print("❌ No data file found!")
+    print("Please run your collection script first (task_data_collection.py)")
+else:
+    latest_file = sorted(files)[-1]
+    print(f"✅ Loading: {latest_file}\n")
+    
+    # Load the JSON file
+    df = pd.read_json(latest_file)
+    
+    print(f"Total stories: {len(df)}\n")
+    
+    # Plot 1: Stories per Category
+    plt.figure(figsize=(8, 5))
+    df["category"].value_counts().plot(kind="bar", color='skyblue')
+    plt.title("Number of Stories per Category")
+    plt.xlabel("Category")
+    plt.ylabel("Count")
+    plt.xticks(rotation=45)
+    plt.tight_layout()
+    plt.show()
+
+    # Plot 2: Average Score per Category
+    plt.figure(figsize=(8, 5))
+    df.groupby("category")["score"].mean().plot(kind="bar", color='coral')
+    plt.title("Average Score per Category")
+    plt.xlabel("Category")
+    plt.ylabel("Average Score")
+    plt.xticks(rotation=45)
+    plt.tight_layout()
+    plt.show()
+
+    # Optional: Top 10 stories by score
+    print("\nTop 10 Highest Scored Stories:")
+    print(df.sort_values(by="score", ascending=False)[["title", "category", "score"]].head(10))
