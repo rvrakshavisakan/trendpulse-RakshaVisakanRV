@@ -1,34 +1,40 @@
 import pandas as pd
-import glob
-import os
+import numpy as np
 
-# === Load the latest JSON file ===
-files = glob.glob("data/trends_*.json") + glob.glob("data/data.json")
+# Load data
+df = pd.read_csv("data/trends_clean.csv")
+print(f"Loaded data: {df.shape}")
 
-if not files:
-    print("No data file found in 'data/' folder!")
-    print("Make sure you ran the collection script first.")
-else:
-    latest_file = sorted(files)[-1]   # Get the most recent one
-    print(f"Loading file: {latest_file}\n")
-    
-    # Read JSON file
-    df = pd.read_json(latest_file)
-    
-    # Basic Analysis
-    print("Total stories collected:", len(df))
-    print("="*50)
-    
-    print("\nStories per category:")
-    print(df["category"].value_counts())
-    
-    print("\nAverage score per category:")
-    print(df.groupby("category")["score"].mean().round(2))
-    
-    print("\nTop 5 highest scored stories:")
-    top5 = df.sort_values(by="score", ascending=False).head(5)
-    print(top5[["title", "category", "score", "num_comments"]])
-    
-    # Optional: Save analysis as CSV for later use
-    df.to_csv("data/latest_analysis.csv", index=False)
-    print(f"\nAnalysis also saved as: data/latest_analysis.csv")
+print("\nFirst 5 rows:")
+print(df.head())
+
+# Basic stats
+print(f"\nAverage score   : {df['score'].mean():,.0f}")
+print(f"Average comments: {df['num_comments'].mean():,.0f}")
+
+# NumPy analysis
+scores = df["score"].to_numpy()
+
+print("\n--- NumPy Stats ---")
+print(f"Mean score    : {np.mean(scores):,.0f}")
+print(f"Median score  : {np.median(scores):,.0f}")
+print(f"Std deviation : {np.std(scores):,.0f}")
+print(f"Max score     : {np.max(scores):,}")
+print(f"Min score     : {np.min(scores)}")
+
+# Most stories category
+most_common_cat = df["category"].value_counts().idxmax()
+print(f"\nMost stories in: {most_common_cat} ({df['category'].value_counts().max()} stories)")
+
+# Most commented story
+most_commented = df.loc[df["num_comments"].idxmax()]
+print(f"Most commented story: \"{most_commented['title']}\" — {most_commented['num_comments']} comments")
+
+# New columns
+avg_score = df["score"].mean()
+df["engagement"] = df["num_comments"] / (df["score"] + 1)
+df["is_popular"] = df["score"] > avg_score
+
+# Save
+df.to_csv("data/trends_analysed.csv", index=False)
+print("\nSaved to data/trends_analysed.csv")
